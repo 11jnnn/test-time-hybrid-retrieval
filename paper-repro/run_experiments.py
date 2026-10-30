@@ -36,6 +36,8 @@ def oracle_retriever(dataset: RagDataset):
 
 def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_2, target_metric='ndcg@5'):
     results = []
+    #这是每条实验记录都要填写的公共字段，方便后面与 GQR 的结果放进同一张表。
+   #baseline 没有查询向量优化过程，因此学习率、优化步数等字段用 0 或空字符串占位。这里 "k": 0 只是记录字段，不表示前面检索了 0 篇文档。
     info_dict = {
         "lr": 0.0, "k": 0, "n_steps": 0, "temp": 0.0,
         "mixture_alpha": 0, "loss_func": "baseline",
@@ -233,6 +235,11 @@ def main(args):
                 mod_2.load_embs(dataset)
                 r2, top_idx_2 = mod_2.run_retrieval(dataset)
                 #先计算 baseline，并准备融合权重
+                #  这里把这些结果交给 run_baselines()，评估：
+                # - mod_1 单独检索的效果。
+                # - mod_2 单独检索的效果。
+                # - 将两者结果通过 RRF、分数融合等方法组合后的效果。
+                # - oracle 参考结果。
                 baselines = run_baselines(dataset, mod_1, mod_2,
                                           r1, r2, top_idx_1, top_idx_2)
                 rows += baselines
