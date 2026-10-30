@@ -52,15 +52,20 @@ def score_multi_vector(
 
     return torch.cat(scores, dim=0)
 
-
+#计算 query 与所有文档的相似度，再为每个 query 取分数最高的 k 个文档。
 def get_topk(d_embs, q_embs, k, is_multi=False):
     device = get_device()
+    #多向量模型用多个向量表示一个 query 或一篇文档，因此需要专门的评分方法。
+    #这个仓库的 score_multi_vector() 使用 MaxSim：
     if is_multi:
         similarity = score_multi_vector(q_embs, d_embs, batch_size=8)
     else:
+        #这行代码本身计算的是点积；如果 query 和文档向量都已经做了 L2 归一化，它就等价于余弦相似度。
         similarity = torch.matmul(q_embs.to(device), d_embs.T.to(device))
+    #如果相似度矩阵是稀疏张量，转成普通稠密张量
     if similarity.is_sparse:
         similarity = similarity.to_dense()
+    #对每个 query，选出最高的 k 个分数
     top_vals, top_idx = torch.topk(similarity, k=k, dim=-1)
     return top_vals, top_idx
 
@@ -203,11 +208,18 @@ class Retriever:
             q = self.q_dict[split].to(device)
         if d is None:
             d = self.d.to(device)
+        #计算相似度，取前 k 个文档
+        #get_topk() 根据向量类型计算相似度，再为每个 query 选出分数最高的 k 个文档。
+        #top_vals	检索到的文档相似度分数	[query数量, k]
+         #top_idx	这些文档在文档集合中的索引	[query数量, k]
         top_vals, top_idx = get_topk(d, q, k=k, is_multi=self.is_multi)
+      #创建结果字典，并取出数据集中的问题文本。 
         results = {}
         questions = dataset.benchmark['question']
+        #获取当前划分对应的 query 索引，再选出这些问题。
         q_indices = dataset.get_queries_indices(split)
         questions = questions[q_indices.numpy()]
+        #把检索张量整理成字典
         for q, val_row, idx_row in zip(
                 questions, top_vals.cpu().tolist(), top_idx.cpu().tolist()
         ):
