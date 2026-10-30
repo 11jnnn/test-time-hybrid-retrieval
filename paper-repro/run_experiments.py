@@ -212,23 +212,27 @@ def main(args):
     print(f"Results in {out_dir}")
 
     rows = []
+    #每次处理一个数据集，设置随机种子以方便复现，然后创建数据集对象。
     for dataset_name in datasets_in_experiment:
         set_seed()
         dataset = RagDataset(dataset_name, prefix=args.datasets_path_prefix)
         for i in range(len(models_in_experiment) - 1):
+            #取出第一个检索器
             mod_1 = models_in_experiment[i]
-
+            #加载嵌入，执行检索
             # the loaded embeddings and retrieval results of mod_1 (i) are reused for every mod_2 (j)
             mod_1.load_embs(dataset)
+            #r1	每个 query 的检索结果，包含文档索引和相似度分数
+            #top_idx_1	每个 query 检索到的文档索引张量
             r1, top_idx_1 = mod_1.run_retrieval(dataset)
 
             for j in range(i + 1, len(models_in_experiment)):
+                #取出第二个检索器
                 mod_2 = models_in_experiment[j]
-
                 print(f"\n{mod_1.id}-{mod_2.id}-{dataset.id}")
                 mod_2.load_embs(dataset)
                 r2, top_idx_2 = mod_2.run_retrieval(dataset)
-
+                #先计算 baseline，并准备融合权重
                 baselines = run_baselines(dataset, mod_1, mod_2,
                                           r1, r2, top_idx_1, top_idx_2)
                 rows += baselines
@@ -241,6 +245,7 @@ def main(args):
 
                 exp_results = []
                 input_params = []
+                #对同一对检索器，分别运行两个 GQR 方向
                 for primary_model, aux_model, feedback_weight in [(mod_1, mod_2, 1-mod_1_weight),
                                                                   (mod_2, mod_1, mod_1_weight)]:
                     if primary_model.is_sparse:
@@ -272,7 +277,7 @@ def main(args):
                 else:
                     for run_args in tqdm.tqdm(input_params, desc=description):
                         exp_results.append(run_query_optimizations(*run_args))
-
+              #把每次实验的结果和参数存起来
                 for result_dict, (_, _, _, _, lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func) in zip(
                         exp_results, input_params):
                     if len(result_dict) == 0:
