@@ -72,7 +72,7 @@ def run_docling_on_hf(dataset: str, name: str):
         with md_path.open("w") as f:
             f.writelines(result.document.export_to_markdown())
 
-
+#把问题和相关页配起来
 def download_hf_queries(dataset: str, out_dir: Path):
     for config_name in ["default", "queries"]:
         try:
@@ -108,7 +108,7 @@ def download_hf_images(dataset: str, name: str, out_dir: Path):
             continue
         img.save(img_path, format="JPEG")
 
-
+#从页面图像生成对应文本
 def run_docling():
     converter = DocumentConverter()
 
