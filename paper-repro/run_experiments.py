@@ -61,7 +61,7 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
         "feedback_model": "",
         "metrics": dataset.evaluate(r2)
     })
-
+   #记录 oracle：使用真实答案构造的参考结果
     oracle_r = oracle_retriever(dataset)
     results.append({
         **info_dict,
@@ -70,21 +70,25 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
         "feedback_model": "",
         "metrics": dataset.evaluate(oracle_r)
     })
-
+   #定义普通融合方法
+    #     RRF	根据两个结果中的文档名次进行融合
+    # average	对两个结果中的文档名次做加权平均
+    # sim_score_minmax	对相似度分数做 Min-Max 归一化，再融合
+    # sim_score_softmax	对相似度分数做 Softmax，再融合
     late_pipelines = {
         "RRF": reciprocal_rank_fusion,
         "average": average_ranking_fusion,
         "sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
         "sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
     }
-
+ #定义需要尝试不同权重的融合方法
     tunable_pipelines = {
         "weighted_average": average_ranking_fusion,
         "weighted_RRF": reciprocal_rank_fusion,
         "weighted_sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
         "weighted_sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
     }
-
+   #如果开启调参：在开发集上选择最佳权重
     if args.tune:
         r1_dev, _ = mod_1.run_retrieval(dataset, split=DataSplit.DEV)
         r2_dev, _ = mod_2.run_retrieval(dataset, split=DataSplit.DEV)
