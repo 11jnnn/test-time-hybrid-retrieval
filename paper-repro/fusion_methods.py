@@ -3,7 +3,11 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-
+#RRF（倒数排名融合）：把两个检索器的排名合成一个新排名。
+# 核心规则是：
+# - 文档排得越靠前，获得的融合分数越高。
+# - 同一篇文档被两个检索器找到，就累加两边的贡献。
+# - 最后按融合分数重新排序。
 def reciprocal_rank_fusion(r1, r2, alpha=0.5, k=60):
     r = {}
     for q in r1.keys():
