@@ -83,24 +83,31 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
 
 def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
                            optimizer, split: DataSplit):
+    #取出两个模型的问题向量、文档向量
     f_d, f_q_dict = feedback_model.load_embs(dataset)
     d, q, f_d, f_q = main_model.d.to(device), main_model.q_dict[split].to(device), f_d.to(device), f_q_dict[split].to(device)
+    #取出问题数量
     Q = q.size(0)
+#  out_q                  → 每个问题优化后的向量
+# doc_indices_per_query  → 每个问题使用的候选文档索引
+# docs_per_query         → 这些候选文档在A中的向量
     out_q = []
     doc_indices_per_query = []
     docs_per_query = []
-
+    #创建可以被更新的 query 向量
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
     opt = optimizer(qs, lr=lr)  # one optimizer for all queries
 
     sim1 = main_model.compute_scores(q, d)
     sim2 = feedback_model.compute_scores(f_q, f_d)
-
+ #分别得到 A、B 为每个问题检索出的前 k 篇文档索引。分数暂时不用，所以第一个返回值写成 _。
     _, top_idx1 = torch.topk(sim1, k=k, dim=-1)
     _, top_idx2 = torch.topk(sim2, k=k, dim=-1)
 
     for i in range(Q):
+        #候选文档先拼接，再去重
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
+        #按照这些索引，从 A 的文档向量中取出候选文档
         docs_u = d.index_select(0, u.to(d.device))
         doc_indices_per_query.append(u.detach().cpu())
         docs_per_query.append(docs_u.detach().cpu())
@@ -110,9 +117,13 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
         mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
             d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
+            #计算当前分布与目标的差异
             loss = loss_func(mixture_d, d1)
+            # 清除之前的梯度
             opt.zero_grad(set_to_none=True)
+             #计算loss对query向量的梯度
             loss.backward(retain_graph=True)
+             # 根据梯度更新query向量
             opt.step()
         out_q.append(qs[i].detach().squeeze())
 
