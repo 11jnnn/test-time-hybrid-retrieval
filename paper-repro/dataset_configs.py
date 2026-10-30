@@ -83,17 +83,20 @@ class RagDataset:
         return self.idx[n:] if split == DataSplit.TEST else self.idx[:n]
 
     def evaluate(self, results, return_raw_results=True):
+       #找出本次需要评估的问题
         b = self.benchmark[self.benchmark['question'].isin(list(results.keys()))]
 
         qs = list(b['question'])
-
+    #这个小函数把文档索引转换成字符串，保留相关性标签
         def _qrels_entry(rels):
             return {str(d): v for d, v in rels.items()}
-
+      #把每个问题和它的真实相关文档配对
         qrels = {str(q): _qrels_entry(rels) for q, rels in zip(b['question'], b['correct_answer_document_ids'])}
         run = {str(q): {str(d): float(s) for d, s in results[q]} for q in qs}
         ks = (1, 5, 10, 100)
+        #计算NDCG@1、NDCG@5、NDCG@10、NDCG@100，Recall@1、Recall@5、Recall@10、Recall@100
         metrics = {f'ndcg_cut.{",".join(map(str, ks))}', f'recall.{",".join(map(str, ks))}'}
+        #调用评估库，为每个问题计算指标
         scores = pytrec_eval.RelevanceEvaluator(qrels, metrics).evaluate(run)
 
         out = {}
