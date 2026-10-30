@@ -246,8 +246,10 @@ def main(args):
                 # - oracle 参考结果。
                 baselines = run_baselines(dataset, mod_1, mod_2,
                                           r1, r2, top_idx_1, top_idx_2)
+                #rows	全部实验的记录，包括 baseline 和 GQR
                 rows += baselines
                 mod_1_weight = 0.5
+                #意图是：开启调参时，从 baseline 记录中取出 Softmax 分数融合选出的权重。`assert` 检查记录是否属于当前这对模型。
                 if args.tune:
                     for res_dict in baselines:
                         if "sim_score_softmax" in res_dict["run_id"]:
@@ -261,10 +263,12 @@ def main(args):
                                                                   (mod_2, mod_1, mod_1_weight)]:
                     if primary_model.is_sparse:
                         continue
-                    
+                    #确定每个方向使用哪些超参数
                     if args.tune and len(param_combinations) > 1:
+                        #tune_hyper() 会在开发集上尝试这些配置，选出最佳参数。
                         best_params = tune_hyper(dataset, primary_model, aux_model, device, param_combinations,
                                                  weight_for_feedback_model=feedback_weight)
+                        #把“最佳参数对应的测试集实验”加入任务清单。
                         input_params.append(
                             (dataset, primary_model, aux_model, device, *best_params)
                         )
@@ -319,6 +323,7 @@ def main(args):
 
             mod_1.clean_embs(dataset)
 
+        #这段代码负责把 rows 中的实验记录整理成表格，写入 CSV 和 JSON 文件。每处理完一个数据集，就保存一次截至目前收集的全部结果。
         # after every dataset, save all results collected so far
         df = pd.DataFrame(rows)
         metrics = sorted({k for m in df["metrics"] for k in m.keys()})
